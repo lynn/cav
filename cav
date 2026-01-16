@@ -1,11 +1,10 @@
 #!/bin/bash
 
-# This script downloads Lovely and Steamodded and installs all the files to the right directories,
-# then tries to update the launch options for Balatro by editing localconfig.vdf.
+# cavendi.sh
 
 set -e
 version="0.1.0"
-cavendish="⚡🍌⚡"
+cavendish="🍌⚡"
 debugging=0
 
 for cmd in curl unzip perl tput find grep; do
@@ -17,7 +16,7 @@ done
 
 HINT=$(tput setaf 6)
 WARN=$(tput setaf 3 && tput bold)
-DIM=$(tput dim)
+DIM=$(tput dim && tput sitm)
 NORMAL=$(tput sgr0)
 
 debug() {
@@ -94,6 +93,7 @@ debug "Found Balatro appdata at $balatro_appdata_path"
 usage() {
     echo "" >&2
     echo "  ${HINT}cav install     ${NORMAL}Install the latest version of Lovely and Steamodded." >&2
+    echo "  ${HINT}cav status      ${NORMAL}Show installed versions of Lovely and Steamodded." >&2
     echo "  ${HINT}cav uninstall   ${NORMAL}Uninstall Lovely and Steamodded." >&2
     echo "  ${HINT}cav new         ${NORMAL}Create a new Balatro mod project." >&2
     exit 2
@@ -144,23 +144,23 @@ SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 
 status() {
     echo ""
-    echo "• cav: ${HINT}$version${NORMAL}"
-    echo "${DIM}└ installed at ${HINT}$SCRIPT_DIR${NORMAL}"
+    echo "  • cav: ${HINT}$version${NORMAL}"
+    echo "  ${DIM}└ installed at ${HINT}$SCRIPT_DIR${NORMAL}"
     echo ""
-    echo "• Balatro: ${HINT}$(balatro_version)${NORMAL}"
+    echo "  • Balatro: ${HINT}$(balatro_version)${NORMAL}"
     if is_balatro_installed; then
-        echo "${DIM}└ installed at ${HINT}$balatro_path${NORMAL}"
+        echo "  ${DIM}└ installed at ${HINT}$balatro_path${NORMAL}"
     fi
     echo ""
-    echo "• Lovely: ${HINT}$(lovely_version)${NORMAL}"
+    echo "  • Lovely: ${HINT}$(lovely_version)${NORMAL}"
     if is_lovely_installed; then
-        echo "${DIM}└ installed at ${HINT}$balatro_path/version.dll${NORMAL}"
+        echo "  ${DIM}└ installed at ${HINT}$balatro_path/version.dll${NORMAL}"
     fi
     echo ""
-    echo "• Steamodded: ${HINT}$(steamodded_version)${NORMAL}"
+    echo "  • Steamodded: ${HINT}$(steamodded_version)${NORMAL}"
     if is_steamodded_installed; then
         steamodded_path=$(compgen -G "$BALATRO_MODS/Steamodded-smods-*" | head -n 1)
-        echo "${DIM}└ installed at ${HINT}$steamodded_path${NORMAL}"
+        echo "  ${DIM}└ installed at ${HINT}$steamodded_path${NORMAL}"
     fi
 }
 
@@ -347,6 +347,8 @@ SMODS.Back{
 
 case "$1" in
     ""|"-h"|"--help")
+        echo ""
+        echo "  $cavendish cav $version"
         usage
         ;;
     version|-v|--version)
