@@ -1,0 +1,287 @@
+#!/bin/bash
+
+# This script downloads Lovely and Steamodded and installs all the files to the right directories,
+# then tries to update the launch options for Balatro by editing localconfig.vdf.
+# (TODO: This second step currently seems to fail. What gives?)
+
+set -e
+version="0.1.0"
+cavendish="⚡🍌⚡"
+debugging=0
+
+debug() {
+    if [ $debugging -eq 1 ]; then echo "$(tput setaf 2)$@$(tput sgr0)" >&2; fi
+}
+
+ask() {
+    echo -n "$1${HINT}" >&2
+    read -r answer
+    echo -n "${NORMAL}" >&2
+    echo "$answer"
+}
+
+for cmd in curl unzip perl tput; do
+    if ! command -v $cmd > /dev/null; then
+        echo "Error: $cmd is not installed." >&2
+        exit 1
+    fi
+done
+
+HINT=$(tput setaf 3)
+DIM=$(tput dim)
+NORMAL=$(tput sgr0)
+
+steam_running() {
+    pgrep '^steam$|^steamwebhelper$' > /dev/null
+}
+
+kill_steam() {
+    if steam_running; then
+        answer=$(ask "Steam is running. Shall I run ${HINT}pkill -x '^steam$|^steamwebhelper$'${NORMAL} to kill it? (y/N) ")
+        if [ "$answer" != "y" ]; then exit 1; fi
+        pkill -x '^steam$|^steamwebhelper$'
+        echo "Waiting for Steam to exit..."
+        while steam_running; do sleep 1; done
+    fi
+}
+
+find_balatro() {
+    local steam_roots=(
+        ~/.local/share/Steam
+        ~/.var/app/com.valvesoftware.Steam/.local/share/Steam
+        ~/snap/steam/common/.local/share/Steam
+        ~/.steam/steam
+    )
+
+    for dir in "${steam_roots[@]}"; do
+        if [ -d "$dir" ]; then steam_root="$dir"; break; fi
+    done
+
+    if [ -z "$steam_root" ]; then
+        echo "No Steam installation found in known locations." >&2
+        exit 1
+    fi
+
+    balatro_path="$steam_root/steamapps/common/Balatro"
+    if [ ! -d "$balatro_path" ]; then
+        echo "Balatro directory not found at $balatro_path" >&2
+        exit 1
+    fi
+
+    if [ -z "$BALATRO_MODS" ]; then
+        balatro_appdata_path="$steam_root/steamapps/compatdata/2379780/pfx/drive_c/users/steamuser/AppData/Roaming/Balatro/"
+        if [ ! -d "$balatro_appdata_path" ]; then
+            echo "Balatro appdata directory not found at $balatro_appdata_path" >&2
+            exit 1
+        fi
+        export BALATRO_MODS="${balatro_appdata_path%/}/Mods"
+    else
+        balatro_appdata_path="${BALATRO_MODS%/Mods}"
+        debug "Got balatro_appdata_path from BALATRO_MODS: ${HINT}$balatro_appdata_path${NORMAL}"
+    fi
+
+    if ! [ -f "$balatro_appdata_path/settings.jkr" ]; then
+        echo "Error: settings.jkr not found at ${HINT}$balatro_appdata_path/settings.jkr${NORMAL} (is Balatro installed?)" >&2
+        exit 1
+    fi
+}
+
+find_balatro
+
+debug "Found Balatro at $balatro_path"
+debug "Found Balatro appdata at $balatro_appdata_path"
+
+usage() {
+    echo "" >&2
+    echo "  ${HINT}$0 install     ${NORMAL}Install the latest version of Lovely and Steamodded." >&2
+    echo "  ${HINT}$0 new         ${NORMAL}Create a new Balatro mod project." >&2
+    exit 2
+}
+
+
+install() {
+    if $(ls "$BALATRO_MODS" | grep -q "Steamodded-smods"); then
+        echo "Error: Steamodded is already installed." >&2
+        echo "To reinstall, please run ${HINT}$0 uninstall${NORMAL} first." >&2
+        exit 1
+    fi
+
+    kill_steam
+    localconfig_path=$(compgen -G "$steam_root/userdata/*/config/localconfig.vdf" | head -n 1)
+
+    echo "Downloading Lovely..."
+    lovely_url=$(curl -sL https://api.github.com/repos/ethangreen-dev/lovely-injector/releases/latest | grep -m1 -Eo 'https://[^#]+windows-msvc.zip' )
+    echo "Lovely URL: $lovely_url"
+    curl -sL $lovely_url > lovely.zip
+    unzip -oq lovely.zip
+    rm lovely.zip
+
+    echo "Downloading Steamodded..."
+    smod_url=$(curl -sL https://api.github.com/repos/Steamodded/smods/releases/latest | grep -Eo 'https://.*zipball/[^"]+')
+    echo "Steamodded URL: $smod_url"
+    curl -sL $smod_url > smod.zip
+    unzip -oq smod.zip
+    rm smod.zip
+
+    # This somewhat hacky Perl script looks for Balatro in localconfig.vdf, removes any
+    # existing LaunchOptions line, and adds a new one with the correct value.
+    perl -ne '
+        $tabs = $` if /"2379780"$/;
+        if (/^$tabs"2379780"$/ .. /^$tabs\}$/) {
+            print qq($tabs\t"LaunchOptions"		"WINEDLLOVERRIDES=version=n,b %command%"\n) if /^$tabs\}$/;
+            print unless /"LaunchOptions"/;
+        } else { print; }
+    ' $localconfig_path > $localconfig_path.tmp
+
+    if [ -n "$(diff $localconfig_path $localconfig_path.tmp)" ]; then
+        echo "Updating Balatro Steam launch options"
+        mv $localconfig_path.tmp $localconfig_path
+    else
+        rm $localconfig_path.tmp
+    fi
+
+    echo "Installing Lovely (version.dll)..."
+    mv version.dll $balatro_path/version.dll
+
+    echo "Installing Steamodded..."
+    mkdir -p $balatro_appdata_path/Mods
+    cp -r Steamodded-* $balatro_appdata_path/Mods/
+    rm -r Steamodded-*
+    echo ""
+    echo "${HINT}=== Done! $cavendish ===${NORMAL}"
+    echo "Lovely version: $(echo $lovely_url | grep -Po '/download/\K(v[0-9.]*)')"
+    echo "Steamodded version: $(cat $BALATRO_MODS/Steamodded-smods-*/release.lua | sed 's/return //')"
+    # echo
+    # echo "You may still need to manually update the launch options in Steam:"
+    # echo ""
+    # echo "- Open Steam"
+    # echo "- Right click on Balatro"
+    # echo "- Select ${HINT}Properties...${NORMAL}"
+    # echo "- Under ${HINT}Launch Options${NORMAL}, enter:"
+    # echo ""
+    # echo -e "  ${HINT}WINEDLLOVERRIDES=\"version=n,b\" %command%${NORMAL}"
+    echo ""
+    echo "You may find it useful to add these lines to your shell config:"
+    echo ""
+    echo "${HINT}export BALATRO_PATH=\"${balatro_path}\"${NORMAL}"
+    echo "${HINT}export BALATRO_MODS=\"${balatro_appdata_path%/}/Mods\"${NORMAL}"
+}
+
+uninstall() {
+    delenda=$(find "$BALATRO_MODS/" -maxdepth 1 -name "Steamodded-smods-*" -type d | sort)
+    if [ -n "$delenda" ]; then
+        kill_steam
+        echo "Commands to uninstall Steamodded:"
+        echo ""
+        for path in $delenda; do
+            echo "  ${HINT}rm -r \"${path}\"${NORMAL}"
+        done
+        echo ""
+        answer=$(ask "Shall I run these commands? (y/N) ")
+        if [ "$answer" != "y" ]; then
+            echo "Aborting."
+            exit 1
+        fi
+        for path in $delenda; do
+            rm -r "$path"
+        done
+        echo "Done! $cavendish"
+    else
+        echo "Nothing to uninstall."
+    fi
+}
+
+slugify() {
+    echo "$1" | iconv -t ascii//TRANSLIT | tr -d "'" | sed -r s/[^a-zA-Z0-9]+/-/g | sed -r s/^-+\|-+$//g | tr A-Z a-z | sed -r 's/(^|-)([a-z])/\U\2/g'
+}
+
+random_adjective() {
+    local adjectives=( "Cool" "Weird" "Bonus" "Fruity" "Fast" "Slow" "Sweet" "Tangy" "Spicy" "Silver" "Merry" "Droll" "Jolly" "Lucky" )
+    echo "${adjectives[$RANDOM % ${#adjectives[@]}]}"
+}
+
+random_noun() {
+    local nouns=( "Clubs" "Diamonds" "Hearts" "Spades" "Joker" "Kings" "Queens" "Jacks" "Deck" "Blind" "Straight" "Flush" "Planet" "Tarot" )
+    echo "${nouns[$RANDOM % ${#nouns[@]}]}"
+}
+
+create_project() {
+    name="$(random_adjective) $(random_noun)"
+    custom_name=$(ask "Enter a name for your mod: ${DIM}(default: $name)${NORMAL} ")
+    if [ -n "$custom_name" ]; then
+        name="$custom_name"
+    fi
+    folder_name=$(slugify "$name")
+    custom_folder_name=$(ask "Enter a folder name: ${DIM}(default: $folder_name)${NORMAL} ")
+    if [ -n "$custom_folder_name" ]; then
+        folder_name="$custom_folder_name"
+    fi
+    mod_path="${balatro_appdata_path%/}/Mods/$folder_name"
+    if [ -d "$mod_path" ]; then
+        echo "Error: Project directory already exists at ${HINT}$mod_path${NORMAL}" >&2
+        echo "Please choose a different name or delete the existing project." >&2
+        exit 1
+    fi
+    description=$(ask "Enter a description for your mod: ")
+    mkdir -p $mod_path
+    echo "--- STEAMODDED HEADER
+--- MOD_NAME: $name
+--- MOD_ID: $folder_name
+--- MOD_AUTHOR: [$(whoami)]
+--- MOD_DESCRIPTION: $description
+--- DEPENDENCIES: [Steamodded>=1.0.0~BETA-0301a]
+
+----------------------------------------------
+------------MOD CODE -------------------------
+
+-- See https://github.com/Steamodded/examples/tree/master/Mods for examples.
+
+SMODS.Back{
+    name = \"Example Deck\",
+    key = \"example\",
+    pos = {x = 0, y = 3},
+    config = {},
+    loc_txt = { name = \"Example Deck\", text = {\"If you see this,\", \"your mod is working!\"} },
+    apply = function()
+        G.E_MANAGER:add_event(Event({
+            func = function()
+                for i = #G.playing_cards, 1, -1 do
+                    G.playing_cards[i]:set_ability(G.P_CENTERS.m_glass)
+                end
+                return true
+            end
+        }))
+    end
+}
+
+----------------------------------------------
+------------MOD CODE END----------------------" >"$mod_path/$folder_name.lua"
+
+    echo "Created project ${HINT}$name${NORMAL} at ${HINT}$mod_path${NORMAL}"
+    echo "You can now start developing your mod by editing the files in this directory."
+    echo ""
+    echo "  ${HINT}cd $mod_path${NORMAL}"
+    echo "  ${HINT}vim $folder_name.lua${NORMAL}"
+}
+
+case "$1" in
+    ""|"-h"|"--help")
+        usage
+        ;;
+    version|-v|--version)
+        echo "$version"
+        ;;
+    install)
+        install
+        ;;
+    uninstall)
+        uninstall
+        ;;
+    new)
+        create_project
+        ;;
+    *)
+        echo "Invalid command: $command" >&2
+        usage
+        ;;
+esac
