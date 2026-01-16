@@ -99,30 +99,17 @@ usage() {
     exit 2
 }
 
+step() {
+    echo "• $1"
+}
 
-install() {
-    if compgen -G "$BALATRO_MODS/Steamodded-smods*" > /dev/null; then
-        echo "Error: Steamodded is already installed." >&2
-        echo "To reinstall, please run ${HINT}cav uninstall${NORMAL} first." >&2
-        exit 1
-    fi
-
-    kill_steam
-    localconfig_path=$(compgen -G "$steam_root/userdata/*/config/localconfig.vdf" | head -n 1)
-
-    echo "Downloading Lovely..."
+install_lovely() {
+    step "Downloading Lovely..."
     lovely_url=$(curl -sL https://api.github.com/repos/ethangreen-dev/lovely-injector/releases/latest | grep -m1 -Eo 'https://[^#]+windows-msvc.zip' )
-    echo "Lovely URL: ${HINT}$lovely_url${NORMAL}"
+    step "Lovely URL: ${HINT}$lovely_url${NORMAL}"
     curl -sL "$lovely_url" > lovely.zip
     unzip -oq lovely.zip
     rm lovely.zip
-
-    echo "Downloading Steamodded..."
-    smod_url=$(curl -sL https://api.github.com/repos/Steamodded/smods/releases/latest | grep -Eo 'https://.*zipball/[^"]+')
-    echo "Steamodded URL: ${HINT}$smod_url${NORMAL}"
-    curl -sL "$smod_url" > smod.zip
-    unzip -oq smod.zip
-    rm smod.zip
 
     # This somewhat hacky Perl script looks for Balatro in localconfig.vdf, removes any
     # existing LaunchOptions line, and adds a new one with the correct value.
@@ -147,26 +134,42 @@ install() {
         cp "$balatro_path/version.dll" "$balatro_path/version.dll.bak"
     fi
 
-    echo "Installing Lovely (version.dll)..."
+    step "Installing Lovely (version.dll)..."
     mv version.dll "$balatro_path/version.dll"
+}
 
-    echo "Installing Steamodded..."
+install_steamodded() {
+    step "Downloading Steamodded..."
+    smod_url=$(curl -sL https://api.github.com/repos/Steamodded/smods/releases/latest | grep -Eo 'https://.*zipball/[^"]+')
+    step "Steamodded URL: ${HINT}$smod_url${NORMAL}"
+    curl -sL "$smod_url" > smod.zip
+    unzip -oq smod.zip
+    rm smod.zip
+
+    step "Installing Steamodded..."
     mkdir -p "$balatro_appdata_path/Mods"
     cp -r Steamodded-* "$balatro_appdata_path/Mods/"
     rm -r Steamodded-*
+}
+
+install() {
+    if compgen -G "$BALATRO_MODS/Steamodded-smods*" > /dev/null; then
+        echo "Error: Steamodded is already installed." >&2
+        echo "To reinstall, please run ${HINT}cav uninstall${NORMAL} first." >&2
+        exit 1
+    fi
+
+    kill_steam
+    localconfig_path=$(compgen -G "$steam_root/userdata/*/config/localconfig.vdf" | head -n 1)
+
+    install_lovely
+    install_steamodded
+
     echo ""
-    echo "${HINT}=== Done! $cavendish ===${NORMAL}"
-    echo "Lovely version: $(echo "$lovely_url" | grep -Po '/download/\K(v[0-9.]*)')"
-    echo "Steamodded version: $(cat "$BALATRO_MODS"/Steamodded-smods-*/release.lua | sed 's/return //')"
-    # echo
-    # echo "You may still need to manually update the launch options in Steam:"
-    # echo ""
-    # echo "- Open Steam"
-    # echo "- Right click on Balatro"
-    # echo "- Select ${HINT}Properties...${NORMAL}"
-    # echo "- Under ${HINT}Launch Options${NORMAL}, enter:"
-    # echo ""
-    # echo -e "  ${HINT}WINEDLLOVERRIDES=\"version=n,b\" %command%${NORMAL}"
+    echo "Done! $cavendish"
+    echo ""
+    echo "• Lovely version: $(echo "$lovely_url" | grep -Po '/download/\K(v[0-9.]*)')"
+    echo "• Steamodded version: $(cat "$BALATRO_MODS"/Steamodded-smods-*/release.lua | sed 's/return //')"
     echo ""
     echo "You may find it useful to add these lines to your shell config:"
     echo ""
@@ -186,10 +189,11 @@ uninstall() {
         if [ "$uninstall_lovely" -eq 1 ]; then
             what="Steamodded and Lovely"
         else
-            echo "${WARN}(I can't uninstall Lovely, because it wasn't installed with cav.)"
-            echo "(You can uninstall it by reinstalling Balatro through Steam.)${NORMAL}"
+            echo "${WARN}⚠ I can't uninstall Lovely, because it wasn't installed with cav. You can uninstall it by reinstalling Balatro through Steam.${NORMAL}"
         fi
-        echo "Commands to uninstall $what:"
+        echo "${WARN}⚠ Uninstalling Steamodded, or installing a new version, may cause in-progress runs to crash.${NORMAL}"
+        echo ""
+        echo "I can uninstall $what using these commands:"
         echo ""
         while IFS= read -r path; do
             echo "  ${HINT}rm -r \"${path}\"${NORMAL}"
@@ -198,7 +202,6 @@ uninstall() {
             echo "  ${HINT}mv \"$balatro_path/version.dll.bak\" \"$balatro_path/version.dll\"${NORMAL}"
         fi
         echo ""
-        echo "${WARN}Uninstalling Steamodded, or installing a new version, may cause in-progress runs to crash.${NORMAL}"
         answer=$(ask "Shall I run these commands? (y/N) ")
         if [ "$answer" != "y" ]; then
             echo "Aborting."
@@ -212,7 +215,8 @@ uninstall() {
         fi
         echo "Done! $cavendish"
     else
-        echo "Nothing to uninstall."
+        echo "Nothing to uninstall in ${HINT}$BALATRO_MODS${NORMAL}"
+        exit 1
     fi
 }
 
