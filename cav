@@ -93,8 +93,9 @@ debug "Found Balatro appdata at $balatro_appdata_path"
 
 usage() {
     echo "" >&2
-    echo "  ${HINT}$0 install     ${NORMAL}Install the latest version of Lovely and Steamodded." >&2
-    echo "  ${HINT}$0 new         ${NORMAL}Create a new Balatro mod project." >&2
+    echo "  ${HINT}cav install     ${NORMAL}Install the latest version of Lovely and Steamodded." >&2
+    echo "  ${HINT}cav uninstall   ${NORMAL}Uninstall Steamodded." >&2
+    echo "  ${HINT}cav new         ${NORMAL}Create a new Balatro mod project." >&2
     exit 2
 }
 
@@ -102,7 +103,7 @@ usage() {
 install() {
     if $(ls "$BALATRO_MODS" | grep -q "Steamodded-smods"); then
         echo "Error: Steamodded is already installed." >&2
-        echo "To reinstall, please run ${HINT}$0 uninstall${NORMAL} first." >&2
+        echo "To reinstall, please run ${HINT}cav uninstall${NORMAL} first." >&2
         exit 1
     fi
 
@@ -207,7 +208,7 @@ random_noun() {
 
 create_project() {
     name="$(random_adjective) $(random_noun)"
-    custom_name=$(ask "Enter a name for your mod: ${DIM}(default: $name)${NORMAL} ")
+    custom_name=$(ask "Enter a name for your mod: ${DIM}(how about $name?)${NORMAL} ")
     if [ -n "$custom_name" ]; then
         name="$custom_name"
     fi
@@ -222,13 +223,12 @@ create_project() {
         echo "Please choose a different name or delete the existing project." >&2
         exit 1
     fi
-    description=$(ask "Enter a description for your mod: ")
     mkdir -p $mod_path
     echo "--- STEAMODDED HEADER
 --- MOD_NAME: $name
 --- MOD_ID: $folder_name
 --- MOD_AUTHOR: [$(whoami)]
---- MOD_DESCRIPTION: $description
+--- MOD_DESCRIPTION: Describe your mod here
 --- DEPENDENCIES: [Steamodded>=1.0.0~BETA-0301a]
 
 ----------------------------------------------
@@ -257,11 +257,15 @@ SMODS.Back{
 ----------------------------------------------
 ------------MOD CODE END----------------------" >"$mod_path/$folder_name.lua"
 
+    echo ""
     echo "Created project ${HINT}$name${NORMAL} at ${HINT}$mod_path${NORMAL}"
     echo "You can now start developing your mod by editing the files in this directory."
     echo ""
     echo "  ${HINT}cd $mod_path${NORMAL}"
-    echo "  ${HINT}vim $folder_name.lua${NORMAL}"
+    echo "  ${HINT}${EDITOR:-vim} $folder_name.lua${NORMAL}"
+    echo ""
+    echo "You should already see your mod if you launch Balatro now."
+    echo "Hold ${HINT}M${NORMAL} in-game to reload mods. Happy modding!"
 }
 
 case "$1" in
