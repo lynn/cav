@@ -2,12 +2,23 @@
 
 # This script downloads Lovely and Steamodded and installs all the files to the right directories,
 # then tries to update the launch options for Balatro by editing localconfig.vdf.
-# (TODO: This second step currently seems to fail. What gives?)
 
 set -e
 version="0.1.0"
 cavendish="⚡🍌⚡"
 debugging=0
+
+for cmd in curl unzip perl tput find grep; do
+    if ! command -v $cmd > /dev/null; then
+        echo "Error: $cmd is not installed." >&2
+        exit 1
+    fi
+done
+
+HINT=$(tput setaf 6)
+WARN=$(tput setaf 3 && tput bold)
+DIM=$(tput dim)
+NORMAL=$(tput sgr0)
 
 debug() {
     if [ $debugging -eq 1 ]; then echo "$(tput setaf 2)$@$(tput sgr0)" >&2; fi
@@ -19,17 +30,6 @@ ask() {
     echo -n "${NORMAL}" >&2
     echo "$answer"
 }
-
-for cmd in curl unzip perl tput; do
-    if ! command -v $cmd > /dev/null; then
-        echo "Error: $cmd is not installed." >&2
-        exit 1
-    fi
-done
-
-HINT=$(tput setaf 3)
-DIM=$(tput dim)
-NORMAL=$(tput sgr0)
 
 steam_running() {
     pgrep '^steam$|^steamwebhelper$' > /dev/null
@@ -94,7 +94,7 @@ debug "Found Balatro appdata at $balatro_appdata_path"
 usage() {
     echo "" >&2
     echo "  ${HINT}cav install     ${NORMAL}Install the latest version of Lovely and Steamodded." >&2
-    echo "  ${HINT}cav uninstall   ${NORMAL}Uninstall Steamodded." >&2
+    echo "  ${HINT}cav uninstall   ${NORMAL}Uninstall Lovely and Steamodded." >&2
     echo "  ${HINT}cav new         ${NORMAL}Create a new Balatro mod project." >&2
     exit 2
 }
@@ -112,14 +112,14 @@ install() {
 
     echo "Downloading Lovely..."
     lovely_url=$(curl -sL https://api.github.com/repos/ethangreen-dev/lovely-injector/releases/latest | grep -m1 -Eo 'https://[^#]+windows-msvc.zip' )
-    echo "Lovely URL: $lovely_url"
+    echo "Lovely URL: ${HINT}$lovely_url${NORMAL}"
     curl -sL $lovely_url > lovely.zip
     unzip -oq lovely.zip
     rm lovely.zip
 
     echo "Downloading Steamodded..."
     smod_url=$(curl -sL https://api.github.com/repos/Steamodded/smods/releases/latest | grep -Eo 'https://.*zipball/[^"]+')
-    echo "Steamodded URL: $smod_url"
+    echo "Steamodded URL: ${HINT}$smod_url${NORMAL}"
     curl -sL $smod_url > smod.zip
     unzip -oq smod.zip
     rm smod.zip
@@ -132,13 +132,19 @@ install() {
             print qq($tabs\t"LaunchOptions"		"WINEDLLOVERRIDES=version=n,b %command%"\n) if /^$tabs\}$/;
             print unless /"LaunchOptions"/;
         } else { print; }
-    ' $localconfig_path > $localconfig_path.tmp
+    ' $localconfig_path > "$localconfig_path.tmp"
 
-    if [ -n "$(diff $localconfig_path $localconfig_path.tmp)" ]; then
+    if [ -n "$(diff "$localconfig_path" "$localconfig_path.tmp")" ]; then
         echo "Updating Balatro Steam launch options"
-        mv $localconfig_path.tmp $localconfig_path
+        mv "$localconfig_path.tmp" "$localconfig_path"
     else
-        rm $localconfig_path.tmp
+        rm "$localconfig_path.tmp"
+    fi
+
+    if grep -q "LOVELY" $balatro_path/version.dll; then
+        debug "The installed version.dll is already Lovely."
+    else
+        cp "$balatro_path/version.dll" "$balatro_path/version.dll.bak"
     fi
 
     echo "Installing Lovely (version.dll)..."
@@ -170,14 +176,29 @@ install() {
 
 uninstall() {
     delenda=$(find "$BALATRO_MODS/" -maxdepth 1 -name "Steamodded-smods-*" -type d | sort)
-    if [ -n "$delenda" ]; then
+    uninstall_lovely=""
+    if [ -f $balatro_path/version.dll.bak ]; then
+        uninstall_lovely="mv $balatro_path/version.dll.bak $balatro_path/version.dll"
+    fi
+    if [ -n "$delenda" ] || [ -n "$uninstall_lovely" ]; then
         kill_steam
-        echo "Commands to uninstall Steamodded:"
+        what="Steamodded"
+        if [ -n "$uninstall_lovely" ]; then
+            what="Steamodded and Lovely"
+        else
+            echo "${WARN}(I can't uninstall Lovely, because it wasn't installed with cav.)"
+            echo "(You can uninstall it by reinstalling Balatro through Steam.)${NORMAL}"
+        fi
+        echo "Commands to uninstall $what:"
         echo ""
         for path in $delenda; do
             echo "  ${HINT}rm -r \"${path}\"${NORMAL}"
         done
+        if [ -n "$uninstall_lovely" ]; then
+            echo "  ${HINT}$uninstall_lovely${NORMAL}"
+        fi
         echo ""
+        echo "${WARN}Uninstalling Steamodded, or installing a new version, may cause in-progress runs to crash.${NORMAL}"
         answer=$(ask "Shall I run these commands? (y/N) ")
         if [ "$answer" != "y" ]; then
             echo "Aborting."
@@ -186,6 +207,7 @@ uninstall() {
         for path in $delenda; do
             rm -r "$path"
         done
+        eval $uninstall_lovely
         echo "Done! $cavendish"
     else
         echo "Nothing to uninstall."
@@ -218,8 +240,9 @@ create_project() {
         folder_name="$custom_folder_name"
     fi
     mod_path="${balatro_appdata_path%/}/Mods/$folder_name"
+    short_mod_path=${mod_path/$BALATRO_MODS/\$BALATRO_MODS}
     if [ -d "$mod_path" ]; then
-        echo "Error: Project directory already exists at ${HINT}$mod_path${NORMAL}" >&2
+        echo "Error: Project directory already exists at ${HINT}$short_mod_path${NORMAL}" >&2
         echo "Please choose a different name or delete the existing project." >&2
         exit 1
     fi
@@ -258,10 +281,10 @@ SMODS.Back{
 ------------MOD CODE END----------------------" >"$mod_path/$folder_name.lua"
 
     echo ""
-    echo "Created project ${HINT}$name${NORMAL} at ${HINT}$mod_path${NORMAL}"
+    echo "Created project ${HINT}$name${NORMAL} at ${HINT}$short_mod_path${NORMAL}"
     echo "You can now start developing your mod by editing the files in this directory."
     echo ""
-    echo "  ${HINT}cd $mod_path${NORMAL}"
+    echo "  ${HINT}cd $short_mod_path${NORMAL}"
     echo "  ${HINT}${EDITOR:-vim} $folder_name.lua${NORMAL}"
     echo ""
     echo "You should already see your mod if you launch Balatro now."
