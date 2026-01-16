@@ -11,6 +11,7 @@ curl https://raw.githubusercontent.com/lynn/cav/refs/heads/main/cav > ~/.local/b
 | Command | Description |
 | ------- | ----------- |
 | `cav install` | Install [Lovely](https://github.com/ethangreen-dev/lovely-injector) and [Steamodded](https://github.com/Steamodded/smods). |
-| `cav uninstall` | Uninstall Steamodded. |
+| `cav status` | View installed versions of Lovely and Steamodded. |
+| `cav uninstall` | Uninstall Lovely and Steamodded. |
 | `cav new` | Create a new mod in the `Mods` folder. |
 
