@@ -9,7 +9,7 @@ cavendish="⚡🍌⚡"
 debugging=0
 
 for cmd in curl unzip perl tput find grep; do
-    if ! command -v $cmd > /dev/null; then
+    if ! command -v "$cmd" > /dev/null; then
         echo "Error: $cmd is not installed." >&2
         exit 1
     fi
@@ -21,7 +21,7 @@ DIM=$(tput dim)
 NORMAL=$(tput sgr0)
 
 debug() {
-    if [ $debugging -eq 1 ]; then echo "$(tput setaf 2)$@$(tput sgr0)" >&2; fi
+    if [ $debugging -eq 1 ]; then echo "$(tput setaf 2)$*$(tput sgr0)" >&2; fi
 }
 
 ask() {
@@ -101,7 +101,7 @@ usage() {
 
 
 install() {
-    if $(ls "$BALATRO_MODS" | grep -q "Steamodded-smods"); then
+    if compgen -G "$BALATRO_MODS/Steamodded-smods*" > /dev/null; then
         echo "Error: Steamodded is already installed." >&2
         echo "To reinstall, please run ${HINT}cav uninstall${NORMAL} first." >&2
         exit 1
@@ -113,14 +113,14 @@ install() {
     echo "Downloading Lovely..."
     lovely_url=$(curl -sL https://api.github.com/repos/ethangreen-dev/lovely-injector/releases/latest | grep -m1 -Eo 'https://[^#]+windows-msvc.zip' )
     echo "Lovely URL: ${HINT}$lovely_url${NORMAL}"
-    curl -sL $lovely_url > lovely.zip
+    curl -sL "$lovely_url" > lovely.zip
     unzip -oq lovely.zip
     rm lovely.zip
 
     echo "Downloading Steamodded..."
     smod_url=$(curl -sL https://api.github.com/repos/Steamodded/smods/releases/latest | grep -Eo 'https://.*zipball/[^"]+')
     echo "Steamodded URL: ${HINT}$smod_url${NORMAL}"
-    curl -sL $smod_url > smod.zip
+    curl -sL "$smod_url" > smod.zip
     unzip -oq smod.zip
     rm smod.zip
 
@@ -132,7 +132,7 @@ install() {
             print qq($tabs\t"LaunchOptions"		"WINEDLLOVERRIDES=version=n,b %command%"\n) if /^$tabs\}$/;
             print unless /"LaunchOptions"/;
         } else { print; }
-    ' $localconfig_path > "$localconfig_path.tmp"
+    ' "$localconfig_path" > "$localconfig_path.tmp"
 
     if [ -n "$(diff "$localconfig_path" "$localconfig_path.tmp")" ]; then
         echo "Updating Balatro Steam launch options"
@@ -141,23 +141,23 @@ install() {
         rm "$localconfig_path.tmp"
     fi
 
-    if grep -q "LOVELY" $balatro_path/version.dll; then
+    if grep -q "LOVELY" "$balatro_path/version.dll"; then
         debug "The installed version.dll is already Lovely."
     else
         cp "$balatro_path/version.dll" "$balatro_path/version.dll.bak"
     fi
 
     echo "Installing Lovely (version.dll)..."
-    mv version.dll $balatro_path/version.dll
+    mv version.dll "$balatro_path/version.dll"
 
     echo "Installing Steamodded..."
-    mkdir -p $balatro_appdata_path/Mods
-    cp -r Steamodded-* $balatro_appdata_path/Mods/
+    mkdir -p "$balatro_appdata_path/Mods"
+    cp -r Steamodded-* "$balatro_appdata_path/Mods/"
     rm -r Steamodded-*
     echo ""
     echo "${HINT}=== Done! $cavendish ===${NORMAL}"
-    echo "Lovely version: $(echo $lovely_url | grep -Po '/download/\K(v[0-9.]*)')"
-    echo "Steamodded version: $(cat $BALATRO_MODS/Steamodded-smods-*/release.lua | sed 's/return //')"
+    echo "Lovely version: $(echo "$lovely_url" | grep -Po '/download/\K(v[0-9.]*)')"
+    echo "Steamodded version: $(cat "$BALATRO_MODS"/Steamodded-smods-*/release.lua | sed 's/return //')"
     # echo
     # echo "You may still need to manually update the launch options in Steam:"
     # echo ""
@@ -176,14 +176,14 @@ install() {
 
 uninstall() {
     delenda=$(find "$BALATRO_MODS/" -maxdepth 1 -name "Steamodded-smods-*" -type d | sort)
-    uninstall_lovely=""
-    if [ -f $balatro_path/version.dll.bak ]; then
-        uninstall_lovely="mv $balatro_path/version.dll.bak $balatro_path/version.dll"
+    uninstall_lovely=0
+    if [ -f "$balatro_path/version.dll.bak" ]; then
+        uninstall_lovely=1
     fi
-    if [ -n "$delenda" ] || [ -n "$uninstall_lovely" ]; then
+    if [ -n "$delenda" ] || [ "$uninstall_lovely" -eq 1 ]; then
         kill_steam
         what="Steamodded"
-        if [ -n "$uninstall_lovely" ]; then
+        if [ "$uninstall_lovely" -eq 1 ]; then
             what="Steamodded and Lovely"
         else
             echo "${WARN}(I can't uninstall Lovely, because it wasn't installed with cav.)"
@@ -191,11 +191,11 @@ uninstall() {
         fi
         echo "Commands to uninstall $what:"
         echo ""
-        for path in $delenda; do
+        while IFS= read -r path; do
             echo "  ${HINT}rm -r \"${path}\"${NORMAL}"
-        done
-        if [ -n "$uninstall_lovely" ]; then
-            echo "  ${HINT}$uninstall_lovely${NORMAL}"
+        done <<< "$delenda"
+        if [ "$uninstall_lovely" -eq 1 ]; then
+            echo "  ${HINT}mv \"$balatro_path/version.dll.bak\" \"$balatro_path/version.dll\"${NORMAL}"
         fi
         echo ""
         echo "${WARN}Uninstalling Steamodded, or installing a new version, may cause in-progress runs to crash.${NORMAL}"
@@ -204,10 +204,12 @@ uninstall() {
             echo "Aborting."
             exit 1
         fi
-        for path in $delenda; do
+        while IFS= read -r path; do
             rm -r "$path"
-        done
-        eval $uninstall_lovely
+        done <<< "$delenda"
+        if [ "$uninstall_lovely" -eq 1 ]; then
+            mv "$balatro_path/version.dll.bak" "$balatro_path/version.dll"
+        fi
         echo "Done! $cavendish"
     else
         echo "Nothing to uninstall."
@@ -215,7 +217,7 @@ uninstall() {
 }
 
 slugify() {
-    echo "$1" | iconv -t ascii//TRANSLIT | tr -d "'" | sed -r s/[^a-zA-Z0-9]+/-/g | sed -r s/^-+\|-+$//g | tr A-Z a-z | sed -r 's/(^|-)([a-z])/\U\2/g'
+    echo "$1" | iconv -t ascii//TRANSLIT | tr -d "'" | sed -r s/[^a-zA-Z0-9]+/-/g | sed -r s/^-+\|-+$//g | tr '[:upper:]' '[:lower:]' | sed -r 's/(^|-)([a-z])/\U\2/g'
 }
 
 random_adjective() {
@@ -246,7 +248,7 @@ create_project() {
         echo "Please choose a different name or delete the existing project." >&2
         exit 1
     fi
-    mkdir -p $mod_path
+    mkdir -p "$mod_path"
     echo "--- STEAMODDED HEADER
 --- MOD_NAME: $name
 --- MOD_ID: $folder_name
@@ -308,7 +310,7 @@ case "$1" in
         create_project
         ;;
     *)
-        echo "Invalid command: $command" >&2
+        echo "Invalid command: $1" >&2
         usage
         ;;
 esac
