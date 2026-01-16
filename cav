@@ -103,6 +103,67 @@ step() {
     echo "• $1"
 }
 
+is_balatro_installed() {
+    [ -f "$balatro_path/Balatro.exe" ]
+}
+
+balatro_version() {
+    if ! is_balatro_installed; then
+        echo "${WARN}not installed${NORMAL}"
+    else
+        grep -aPo 'version.jkr\K.*' "$balatro_path/Balatro.exe" || echo "unknown"
+    fi
+}
+
+is_lovely_installed() {
+    [ -f "$balatro_path/version.dll" ]
+}
+
+lovely_version() {
+    if ! is_lovely_installed; then
+        echo "${WARN}not installed${NORMAL}"
+    else
+        grep -aPo 'lovely.{0,30}\K\d+\.\d+\.\d+(-beta\d+)?' "$balatro_path/version.dll" || echo "unknown"
+    fi
+}
+
+is_steamodded_installed() {
+    [ -n "$(compgen -G "$BALATRO_MODS/Steamodded-smods-*")" ]
+}
+
+steamodded_version() {
+    if ! is_steamodded_installed; then
+        echo "${WARN}not installed${NORMAL}"
+    else
+        cat "$BALATRO_MODS"/Steamodded-smods-*/release.lua | sed 's/return \|"//g' || echo "unknown"
+    fi
+}
+
+
+SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+
+status() {
+    echo ""
+    echo "• cav: ${HINT}$version${NORMAL}"
+    echo "${DIM}└ installed at ${HINT}$SCRIPT_DIR${NORMAL}"
+    echo ""
+    echo "• Balatro: ${HINT}$(balatro_version)${NORMAL}"
+    if is_balatro_installed; then
+        echo "${DIM}└ installed at ${HINT}$balatro_path${NORMAL}"
+    fi
+    echo ""
+    echo "• Lovely: ${HINT}$(lovely_version)${NORMAL}"
+    if is_lovely_installed; then
+        echo "${DIM}└ installed at ${HINT}$balatro_path/version.dll${NORMAL}"
+    fi
+    echo ""
+    echo "• Steamodded: ${HINT}$(steamodded_version)${NORMAL}"
+    if is_steamodded_installed; then
+        steamodded_path=$(compgen -G "$BALATRO_MODS/Steamodded-smods-*" | head -n 1)
+        echo "${DIM}└ installed at ${HINT}$steamodded_path${NORMAL}"
+    fi
+}
+
 install_lovely() {
     step "Downloading Lovely..."
     lovely_url=$(curl -sL https://api.github.com/repos/ethangreen-dev/lovely-injector/releases/latest | grep -m1 -Eo 'https://[^#]+windows-msvc.zip' )
@@ -169,7 +230,7 @@ install() {
     echo "Done! $cavendish"
     echo ""
     echo "• Lovely version: $(echo "$lovely_url" | grep -Po '/download/\K(v[0-9.]*)')"
-    echo "• Steamodded version: $(cat "$BALATRO_MODS"/Steamodded-smods-*/release.lua | sed 's/return //')"
+    echo "• Steamodded version: $(steamodded_version)"
     echo ""
     echo "You may find it useful to add these lines to your shell config:"
     echo ""
@@ -179,18 +240,9 @@ install() {
 
 uninstall() {
     delenda=$(find "$BALATRO_MODS/" -maxdepth 1 -name "Steamodded-smods-*" -type d | sort)
-    uninstall_lovely=0
-    if [ -f "$balatro_path/version.dll.bak" ]; then
-        uninstall_lovely=1
-    fi
-    if [ -n "$delenda" ] || [ "$uninstall_lovely" -eq 1 ]; then
+    if [ -n "$delenda" ]; then
         kill_steam
-        what="Steamodded"
-        if [ "$uninstall_lovely" -eq 1 ]; then
-            what="Steamodded and Lovely"
-        else
-            echo "${WARN}⚠ I can't uninstall Lovely, because it wasn't installed with cav. You can uninstall it by reinstalling Balatro through Steam.${NORMAL}"
-        fi
+        what="Steamodded and Lovely"
         echo "${WARN}⚠ Uninstalling Steamodded, or installing a new version, may cause in-progress runs to crash.${NORMAL}"
         echo ""
         echo "I can uninstall $what using these commands:"
@@ -198,9 +250,7 @@ uninstall() {
         while IFS= read -r path; do
             echo "  ${HINT}rm -r \"${path}\"${NORMAL}"
         done <<< "$delenda"
-        if [ "$uninstall_lovely" -eq 1 ]; then
-            echo "  ${HINT}mv \"$balatro_path/version.dll.bak\" \"$balatro_path/version.dll\"${NORMAL}"
-        fi
+        echo "  ${HINT}rm \"$balatro_path/version.dll\"${NORMAL}"
         echo ""
         answer=$(ask "Shall I run these commands? (y/N) ")
         if [ "$answer" != "y" ]; then
@@ -210,9 +260,7 @@ uninstall() {
         while IFS= read -r path; do
             rm -r "$path"
         done <<< "$delenda"
-        if [ "$uninstall_lovely" -eq 1 ]; then
-            mv "$balatro_path/version.dll.bak" "$balatro_path/version.dll"
-        fi
+        rm "$balatro_path/version.dll"
         echo "Done! $cavendish"
     else
         echo "Nothing to uninstall in ${HINT}$BALATRO_MODS${NORMAL}"
@@ -225,12 +273,12 @@ slugify() {
 }
 
 random_adjective() {
-    local adjectives=( "Cool" "Weird" "Bonus" "Fruity" "Fast" "Slow" "Sweet" "Tangy" "Spicy" "Silver" "Merry" "Droll" "Jolly" "Lucky" )
+    local adjectives=( "Cool" "Weird" "Bonus" "Fruity" "Fast" "Slow" "Sweet" "Tangy" "Spicy" "Silver" "Merry" "Droll" "Jolly" "Lucky" "Thrifty" "Risky" "Hyper" "Quantum" "Secret" "Fiery" "Glass" "Polychrome" "Holographic" "Stone" "Red" "Blue" "Yellow" "Green" )
     echo "${adjectives[$RANDOM % ${#adjectives[@]}]}"
 }
 
 random_noun() {
-    local nouns=( "Clubs" "Diamonds" "Hearts" "Spades" "Joker" "Kings" "Queens" "Jacks" "Deck" "Blind" "Straight" "Flush" "Planet" "Tarot" )
+    local nouns=( "Clubs" "Diamonds" "Hearts" "Spades" "Joker" "Aces" "Kings" "Queens" "Jacks" "Deck" "Blind" "Straight" "Flush" "Planet" "Tarot" "Money" "Reroll" "Card" "Shop" "Jimbo" "Pair" "Sevens" "Eights" "Nines" )
     echo "${nouns[$RANDOM % ${#nouns[@]}]}"
 }
 
@@ -303,6 +351,9 @@ case "$1" in
         ;;
     version|-v|--version)
         echo "$version"
+        ;;
+    status)
+        status
         ;;
     install)
         install
