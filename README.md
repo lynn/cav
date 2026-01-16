@@ -1,8 +1,12 @@
 # cav
 
-**cav** is a Bash script that lets you get started with Balatro modding on Linux easily. :banana:
+**cav** is a Bash script that lets you get started with Balatro modding on Linux easily. :banana: :zap: :sparkles:
 
 To install it, put `cav` in `~/.local/bin/` (or anywhere else that's on your `$PATH`).
+
+```sh
+curl https://raw.githubusercontent.com/lynn/cav/refs/heads/main/cav > ~/.local/bin/cav
+```
 
 | Command | Description |
 | ------- | ----------- |
