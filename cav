@@ -14,6 +14,9 @@ for cmd in curl unzip perl tput find grep; do
     fi
 done
 
+GREEN=$(tput setaf 2 && tput bold)
+RED=$(tput setaf 1 && tput bold)
+HIGHLIGHT=$(tput setaf 3 && tput bold)
 HINT=$(tput setaf 6)
 WARN=$(tput setaf 3 && tput bold)
 DIM=$(tput dim && tput sitm)
@@ -93,10 +96,10 @@ debug "Found Balatro appdata at $balatro_appdata_path"
 usage() {
     echo "" >&2
     echo "  ${HINT}cav install     ${NORMAL}Install the latest version of Lovely and Steamodded." >&2
-    echo "  ${HINT}cav status      ${NORMAL}Show installed versions of Lovely and Steamodded." >&2
+    echo "  ${HINT}cav status      ${NORMAL}Show installed versions." >&2
+    echo "  ${HINT}cav list        ${NORMAL}List available versions of Lovely and Steamodded." >&2
     echo "  ${HINT}cav uninstall   ${NORMAL}Uninstall Lovely and Steamodded." >&2
     echo "  ${HINT}cav new         ${NORMAL}Create a new Balatro mod project." >&2
-    exit 2
 }
 
 step() {
@@ -135,7 +138,7 @@ steamodded_version() {
     if ! is_steamodded_installed; then
         echo "${WARN}not installed${NORMAL}"
     else
-        cat "$BALATRO_MODS"/Steamodded-smods-*/release.lua | sed 's/return \|"//g' || echo "unknown"
+        cat "$BALATRO_MODS"/Steamodded-smods-*/release.lua | sed 's/return \|"\|-STEAMODDED//g;s/~BETA/-beta/g' | tr -d ' ' || echo "unknown"
     fi
 }
 
@@ -144,24 +147,52 @@ SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 
 status() {
     echo ""
-    echo "  • cav: ${HINT}$version${NORMAL}"
+    echo "  ${GREEN}•${NORMAL} cav: ${HINT}$version${NORMAL}"
     echo "  ${DIM}└ installed at ${HINT}$SCRIPT_DIR${NORMAL}"
     echo ""
-    echo "  • Balatro: ${HINT}$(balatro_version)${NORMAL}"
     if is_balatro_installed; then
+        echo "  ${GREEN}•${NORMAL} Balatro: ${HINT}$(balatro_version)${NORMAL}"
         echo "  ${DIM}└ installed at ${HINT}$balatro_path${NORMAL}"
+    else
+        echo "  ${RED}•${NORMAL} Balatro: ${HINT}not installed${NORMAL}"
     fi
     echo ""
-    echo "  • Lovely: ${HINT}$(lovely_version)${NORMAL}"
     if is_lovely_installed; then
+        echo "  ${GREEN}•${NORMAL} Lovely: ${HINT}$(lovely_version)${NORMAL}"
         echo "  ${DIM}└ installed at ${HINT}$balatro_path/version.dll${NORMAL}"
+    else
+        echo "  ${RED}•${NORMAL} Lovely: ${HINT}not installed${NORMAL}"
     fi
     echo ""
-    echo "  • Steamodded: ${HINT}$(steamodded_version)${NORMAL}"
     if is_steamodded_installed; then
+        echo "  ${GREEN}•${NORMAL} Steamodded: ${HINT}$(steamodded_version)${NORMAL}"
         steamodded_path=$(compgen -G "$BALATRO_MODS/Steamodded-smods-*" | head -n 1)
         echo "  ${DIM}└ installed at ${HINT}$steamodded_path${NORMAL}"
+    else
+        echo "  ${RED}•${NORMAL} Steamodded: ${HINT}not installed${NORMAL}"
     fi
+}
+
+list_versions() {
+    versions=$(curl -sL "https://api.github.com/repos/$1/releases" | grep -E '"tag_name"|"published_at"' | \
+        paste -d ' ' - - | sed -E 's/.*"tag_name": "([^"]+)".*"published_at": "([^T]+)T.*/  \1  '"${DIM}"'(\2)'"${NORMAL}"'/')
+    if [ -n "$2" ]; then
+        echo "${versions//  $2/${HIGHLIGHT}» $2${NORMAL}}"
+    else
+        echo "$versions"
+    fi
+}
+
+list() {
+    echo ""
+    echo "${HINT}Available Lovely versions:${NORMAL}"
+    echo ""
+    list_versions "ethangreen-dev/lovely-injector" "v$(lovely_version)"
+    echo ""
+    echo "${HINT}Available Steamodded versions:${NORMAL}"
+    echo ""
+    list_versions "Steamodded/smods" "$(steamodded_version)"
+    echo ""
 }
 
 install_lovely() {
@@ -187,12 +218,6 @@ install_lovely() {
         mv "$localconfig_path.tmp" "$localconfig_path"
     else
         rm "$localconfig_path.tmp"
-    fi
-
-    if grep -q "LOVELY" "$balatro_path/version.dll"; then
-        debug "The installed version.dll is already Lovely."
-    else
-        cp "$balatro_path/version.dll" "$balatro_path/version.dll.bak"
     fi
 
     step "Installing Lovely (version.dll)..."
@@ -228,9 +253,7 @@ install() {
 
     echo ""
     echo "Done! $cavendish"
-    echo ""
-    echo "• Lovely version: $(echo "$lovely_url" | grep -Po '/download/\K(v[0-9.]*)')"
-    echo "• Steamodded version: $(steamodded_version)"
+    status
     echo ""
     echo "You may find it useful to add these lines to your shell config:"
     echo ""
@@ -357,6 +380,9 @@ case "$1" in
     status)
         status
         ;;
+    list)
+        list
+        ;;
     install)
         install
         ;;
@@ -369,5 +395,6 @@ case "$1" in
     *)
         echo "Invalid command: $1" >&2
         usage
+	exit 2
         ;;
 esac

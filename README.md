@@ -12,6 +12,7 @@
 | Command | Description |
 | ------- | ----------- |
 | `cav install` | Install [Lovely](https://github.com/ethangreen-dev/lovely-injector) and [Steamodded](https://github.com/Steamodded/smods). |
+| `cav list` | List available versions of Lovely and Steamodded. |
 | `cav status` | View installed versions of Lovely and Steamodded. |
 | `cav uninstall` | Uninstall Lovely and Steamodded. |
 | `cav new` | Create a new mod in the `Mods` folder. |
