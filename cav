@@ -7,10 +7,14 @@ version="0.1.0"
 cavendish="🍌⚡"
 debugging=0
 
+warn() { echo "${WARN}[!]${NORMAL} $*" >&2; }
+error() { echo "${RED}[X]${NORMAL} $*" >&2; }
+die() { error "$*" && exit 1; }
+debug() { if [ $debugging -eq 1 ]; then echo "${GREEN}[-]${NORMAL} $*" >&2; fi; }
+
 for cmd in curl unzip perl tput find grep; do
     if ! command -v "$cmd" > /dev/null; then
-        echo "Error: $cmd is not installed." >&2
-        exit 1
+        die "$cmd is not installed."
     fi
 done
 
@@ -22,15 +26,16 @@ WARN=$(tput setaf 3 && tput bold)
 DIM=$(tput dim && tput sitm)
 NORMAL=$(tput sgr0)
 
-debug() {
-    if [ $debugging -eq 1 ]; then echo "$(tput setaf 2)$*$(tput sgr0)" >&2; fi
-}
-
 ask() {
     echo -n "$1${HINT}" >&2
     read -r answer
     echo -n "${NORMAL}" >&2
     echo "$answer"
+}
+
+confirm() {
+    answer=$(ask "$1 (y/N) ")
+    [[ "$answer" =~ ^[Yy]$ ]]
 }
 
 steam_running() {
@@ -39,11 +44,11 @@ steam_running() {
 
 kill_steam() {
     if steam_running; then
-        answer=$(ask "Steam is running. Shall I run ${HINT}pkill -x '^steam$|^steamwebhelper$'${NORMAL} to kill it? (y/N) ")
-        if [ "$answer" != "y" ]; then exit 1; fi
+        confirm "Steam is running. Shall I run ${HINT}pkill -x '^steam$|^steamwebhelper$'${NORMAL} to kill it?"
         pkill -x '^steam$|^steamwebhelper$'
-        echo "Waiting for Steam to exit..."
-        while steam_running; do sleep 1; done
+        echo -n "Waiting for Steam to exit."
+        while steam_running; do sleep 0.5; echo -n "."; done
+        echo ""
     fi
 }
 
@@ -60,21 +65,18 @@ find_balatro() {
     done
 
     if [ -z "$steam_root" ]; then
-        echo "No Steam installation found in known locations." >&2
-        exit 1
+        die "No Steam installation found in known locations."
     fi
 
     balatro_path="$steam_root/steamapps/common/Balatro"
     if [ ! -d "$balatro_path" ]; then
-        echo "Balatro directory not found at $balatro_path" >&2
-        exit 1
+        die "Balatro directory not found at $balatro_path"
     fi
 
     if [ -z "$BALATRO_MODS" ]; then
         balatro_appdata_path="$steam_root/steamapps/compatdata/2379780/pfx/drive_c/users/steamuser/AppData/Roaming/Balatro/"
         if [ ! -d "$balatro_appdata_path" ]; then
-            echo "Balatro appdata directory not found at $balatro_appdata_path" >&2
-            exit 1
+            die "Balatro appdata directory not found at $balatro_appdata_path"
         fi
         export BALATRO_MODS="${balatro_appdata_path%/}/Mods"
     else
@@ -83,8 +85,7 @@ find_balatro() {
     fi
 
     if ! [ -f "$balatro_appdata_path/settings.jkr" ]; then
-        echo "Error: settings.jkr not found at ${HINT}$balatro_appdata_path/settings.jkr${NORMAL} (is Balatro installed?)" >&2
-        exit 1
+        die "settings.jkr not found at ${HINT}$balatro_appdata_path/settings.jkr${NORMAL} (is Balatro installed?)"
     fi
 }
 
@@ -93,9 +94,7 @@ find_balatro
 debug "Found Balatro at $balatro_path"
 debug "Found Balatro appdata at $balatro_appdata_path"
 
-step() {
-    echo "• $1"
-}
+step() { echo "${HINT}•${NORMAL} $1"; }
 
 is_balatro_installed() {
     [ -f "$balatro_path/Balatro.exe" ]
@@ -139,28 +138,46 @@ SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 status() {
     echo ""
     echo "  ${GREEN}•${NORMAL} cav: ${HINT}$version${NORMAL}"
-    echo "  ${DIM}└ installed at ${HINT}$SCRIPT_DIR${NORMAL}"
-    echo ""
+    if [ -n "$1" ]; then
+        echo "  ${DIM}└ installed at ${HINT}$SCRIPT_DIR${NORMAL}"
+        echo ""
+    fi
     if is_balatro_installed; then
         echo "  ${GREEN}•${NORMAL} Balatro: ${HINT}$(balatro_version)${NORMAL}"
-        echo "  ${DIM}└ installed at ${HINT}$balatro_path${NORMAL}"
+        if [ -n "$1" ]; then
+            echo "  ${DIM}└ installed at ${HINT}$balatro_path${NORMAL}"
+            echo ""
+        fi
     else
         echo "  ${RED}•${NORMAL} Balatro: ${HINT}not installed${NORMAL}"
+        if [ -n "$1" ]; then
+            echo ""
+        fi
     fi
-    echo ""
     if is_lovely_installed; then
         echo "  ${GREEN}•${NORMAL} Lovely: ${HINT}$(lovely_version)${NORMAL}"
-        echo "  ${DIM}└ installed at ${HINT}$balatro_path/version.dll${NORMAL}"
+        if [ -n "$1" ]; then
+            echo "  ${DIM}└ installed at ${HINT}$balatro_path/version.dll${NORMAL}"
+            echo ""
+        fi
     else
         echo "  ${RED}•${NORMAL} Lovely: ${HINT}not installed${NORMAL}"
+        if [ -n "$1" ]; then
+            echo ""
+        fi
     fi
-    echo ""
     if is_steamodded_installed; then
         echo "  ${GREEN}•${NORMAL} Steamodded: ${HINT}$(steamodded_version)${NORMAL}"
         steamodded_path=$(compgen -G "$BALATRO_MODS/Steamodded-smods-*" | head -n 1)
-        echo "  ${DIM}└ installed at ${HINT}$steamodded_path${NORMAL}"
+        if [ -n "$1" ]; then
+            echo "  ${DIM}└ installed at ${HINT}$steamodded_path${NORMAL}"
+            echo ""
+        fi
     else
         echo "  ${RED}•${NORMAL} Steamodded: ${HINT}not installed${NORMAL}"
+        if [ -n "$1" ]; then
+            echo ""
+        fi
     fi
 }
 
@@ -235,9 +252,8 @@ install_steamodded() {
 
 install() {
     if compgen -G "$BALATRO_MODS/Steamodded-smods*" > /dev/null; then
-        echo "Error: Steamodded is already installed." >&2
-        echo "To reinstall, please run ${HINT}cav uninstall${NORMAL} first." >&2
-        exit 1
+        error "Steamodded is already installed."
+        die "To reinstall, please run ${HINT}cav uninstall${NORMAL} first."
     fi
 
     kill_steam
@@ -260,33 +276,28 @@ uninstall() {
     delenda=$(find "$BALATRO_MODS/" -maxdepth 1 -name "Steamodded-smods-*" -type d | sort)
     if [ -n "$delenda" ]; then
         kill_steam
-        what="Steamodded and Lovely"
-        echo "${WARN}⚠ Uninstalling Steamodded, or installing a new version, may cause in-progress runs to crash.${NORMAL}"
+        warn "Uninstalling Steamodded, or installing a new version, may cause in-progress runs to crash."
         echo ""
-        echo "I can uninstall $what using these commands:"
+        echo "I can uninstall Steamodded and Lovely using these commands:"
         echo ""
         while IFS= read -r path; do
             echo "  ${HINT}rm -r \"${path}\"${NORMAL}"
         done <<< "$delenda"
         echo "  ${HINT}rm \"$balatro_path/version.dll\"${NORMAL}"
         echo ""
-        answer=$(ask "Shall I run these commands? (y/N) ")
-        if [ "$answer" != "y" ]; then
-            echo "Aborting."
-            exit 1
-        fi
+        confirm "Shall I run these commands?" || die "Aborting."
         while IFS= read -r path; do
             rm -r "$path"
         done <<< "$delenda"
         rm "$balatro_path/version.dll"
         echo "Done! $cavendish"
     else
-        echo "Nothing to uninstall in ${HINT}$BALATRO_MODS${NORMAL}"
+        echo "Nothing to uninstall in ${HINT}$BALATRO_MODS${NORMAL}."
         exit 1
     fi
 }
 
-slugify() {
+pascal_case() {
     echo "$1" | iconv -t ascii//TRANSLIT | tr -d "'" | sed -r s/[^a-zA-Z0-9]+/-/g | sed -r s/^-+\|-+$//g | tr '[:upper:]' '[:lower:]' | sed -r 's/(^|-)([a-z])/\U\2/g'
 }
 
@@ -306,7 +317,7 @@ create_project() {
     if [ -n "$custom_name" ]; then
         name="$custom_name"
     fi
-    folder_name=$(slugify "$name")
+    folder_name=$(pascal_case "$name")
     custom_folder_name=$(ask "Enter a folder name: ${DIM}(default: $folder_name)${NORMAL} ")
     if [ -n "$custom_folder_name" ]; then
         folder_name="$custom_folder_name"
@@ -383,7 +394,7 @@ case "$1" in
         echo "$version"
         ;;
     status)
-        status
+        status verbose
         ;;
     list)
         case "$2" in
@@ -394,11 +405,7 @@ case "$1" in
                 list_steamodded
                 ;;
             *)
-                echo "Error: 'list' requires a subcommand (lovely or steamodded)" >&2
-                echo "" >&2
-                echo "  ${HINT}cav list lovely     ${NORMAL}List available versions of Lovely." >&2
-                echo "  ${HINT}cav list steamodded ${NORMAL}List available versions of Steamodded." >&2
-                exit 2
+                die "'list' requires a subcommand (lovely or steamodded)"
                 ;;
         esac
         ;;
