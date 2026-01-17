@@ -93,15 +93,6 @@ find_balatro
 debug "Found Balatro at $balatro_path"
 debug "Found Balatro appdata at $balatro_appdata_path"
 
-usage() {
-    echo "" >&2
-    echo "  ${HINT}cav install     ${NORMAL}Install the latest version of Lovely and Steamodded." >&2
-    echo "  ${HINT}cav status      ${NORMAL}Show installed versions." >&2
-    echo "  ${HINT}cav list        ${NORMAL}List available versions of Lovely and Steamodded." >&2
-    echo "  ${HINT}cav uninstall   ${NORMAL}Uninstall Lovely and Steamodded." >&2
-    echo "  ${HINT}cav new         ${NORMAL}Create a new Balatro mod project." >&2
-}
-
 step() {
     echo "• $1"
 }
@@ -183,11 +174,15 @@ list_versions() {
     fi
 }
 
-list() {
+list_lovely() {
     echo ""
     echo "${HINT}Available Lovely versions:${NORMAL}"
     echo ""
     list_versions "ethangreen-dev/lovely-injector" "v$(lovely_version)"
+    echo ""
+}
+
+list_steamodded() {
     echo ""
     echo "${HINT}Available Steamodded versions:${NORMAL}"
     echo ""
@@ -368,6 +363,16 @@ SMODS.Back{
     echo "Hold ${HINT}M${NORMAL} in-game to reload mods. Happy modding!"
 }
 
+usage() {
+    echo "" >&2
+    echo "  ${HINT}cav install         ${NORMAL}Install the latest version of Lovely and Steamodded." >&2
+    echo "  ${HINT}cav status          ${NORMAL}Show installed versions." >&2
+    echo "  ${HINT}cav list lovely     ${NORMAL}List available versions of Lovely." >&2
+    echo "  ${HINT}cav list steamodded ${NORMAL}List available versions of Steamodded." >&2
+    echo "  ${HINT}cav uninstall       ${NORMAL}Uninstall Lovely and Steamodded." >&2
+    echo "  ${HINT}cav new             ${NORMAL}Create a new Balatro mod project." >&2
+}
+
 case "$1" in
     ""|"-h"|"--help")
         echo ""
@@ -381,7 +386,21 @@ case "$1" in
         status
         ;;
     list)
-        list
+        case "$2" in
+            lovely)
+                list_lovely
+                ;;
+            steamodded)
+                list_steamodded
+                ;;
+            *)
+                echo "Error: 'list' requires a subcommand (lovely or steamodded)" >&2
+                echo "" >&2
+                echo "  ${HINT}cav list lovely     ${NORMAL}List available versions of Lovely." >&2
+                echo "  ${HINT}cav list steamodded ${NORMAL}List available versions of Steamodded." >&2
+                exit 2
+                ;;
+        esac
         ;;
     install)
         install
