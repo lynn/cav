@@ -7,10 +7,31 @@ version="0.1.0"
 cavendish="🍌⚡"
 debugging=0
 
-warn() { echo "${WARN}[!]${NORMAL} $*" >&2; }
-error() { echo "${RED}[X]${NORMAL} $*" >&2; }
+declare -A mod_desc
+declare -A mod_url
+
+mod_desc["Pampa"]='Adds 28 jokers by Pampa'
+mod_url["Pampa"]='https://github.com/batabata3/balatro-pampa-joker-pack.git'
+
+mod_desc["CardSleeves"]='Adds sleeves as modifiers to decks'
+mod_url["CardSleeves"]='https://github.com/larswijn/CardSleeves.git'
+
+mod_desc["paperback"]='Expands the base game in many ways'
+mod_url["paperback"]='https://github.com/Balatro-Paperback/paperback.git'
+
+mod_desc["Cryptid"]='An unbalanced mod'
+mod_url["Cryptid"]='https://github.com/SpectralPack/Cryptid.git'
+
+mod_desc["ExtraCredit"]='A small-scale vanilla-style content mod'
+mod_url["ExtraCredit"]='https://github.com/GuilloryCraft/ExtraCredit.git'
+
+mod_desc["CozyStats"]='Stats'
+mod_url["CozyStats"]='https://github.com/NoxZet/CozyStats'
+
+warn() { echo "${WARN}  !${NORMAL} $*" >&2; }
+error() { echo "${RED}  X${NORMAL} $*" >&2; }
 die() { error "$*" && exit 1; }
-debug() { if [ $debugging -eq 1 ]; then echo "${GREEN}[-]${NORMAL} $*" >&2; fi; }
+debug() { if [ $debugging -eq 1 ]; then echo "${GREEN}  =${NORMAL} $*" >&2; fi; }
 
 for cmd in curl unzip perl tput find grep; do
     if ! command -v "$cmd" > /dev/null; then
@@ -78,11 +99,13 @@ find_balatro() {
         if [ ! -d "$balatro_appdata_path" ]; then
             die "Balatro appdata directory not found at $balatro_appdata_path"
         fi
-        export BALATRO_MODS="${balatro_appdata_path%/}/Mods"
+        # export BALATRO_MODS="${balatro_appdata_path%/}/Mods"
     else
         balatro_appdata_path="${BALATRO_MODS%/Mods}"
         debug "Got balatro_appdata_path from BALATRO_MODS: ${HINT}$balatro_appdata_path${NORMAL}"
     fi
+
+    balatro_mods="${balatro_appdata_path%/}/Mods"
 
     if ! [ -f "$balatro_appdata_path/settings.jkr" ]; then
         die "settings.jkr not found at ${HINT}$balatro_appdata_path/settings.jkr${NORMAL} (is Balatro installed?)"
@@ -94,7 +117,7 @@ find_balatro
 debug "Found Balatro at $balatro_path"
 debug "Found Balatro appdata at $balatro_appdata_path"
 
-step() { echo "${HINT}•${NORMAL} $1"; }
+step() { echo "  ${HINT}•${NORMAL} $1"; }
 
 is_balatro_installed() {
     [ -f "$balatro_path/Balatro.exe" ]
@@ -121,74 +144,65 @@ lovely_version() {
 }
 
 is_steamodded_installed() {
-    [ -n "$(compgen -G "$BALATRO_MODS/Steamodded-smods-*")" ]
+    [ -n "$(compgen -G "$balatro_mods/Steamodded-smods-*")" ]
 }
 
 steamodded_version() {
     if ! is_steamodded_installed; then
         echo "${WARN}not installed${NORMAL}"
     else
-        cat "$BALATRO_MODS"/Steamodded-smods-*/release.lua | sed 's/return \|"\|-STEAMODDED//g;s/~BETA/-beta/g' | tr -d ' ' || echo "unknown"
+        cat "$balatro_mods"/Steamodded-smods-*/release.lua | sed 's/return \|"\|-STEAMODDED//g;s/~BETA/-beta/g' | tr -d ' ' || echo "unknown"
     fi
 }
 
 
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 
-status() {
-    echo ""
-    echo "  ${GREEN}•${NORMAL} cav: ${HINT}$version${NORMAL}"
-    if [ -n "$1" ]; then
-        echo "  ${DIM}└ installed at ${HINT}$SCRIPT_DIR${NORMAL}"
+print_component() {
+    local name=$1
+    local version=$2
+    local path=$3
+    local verbose=$4
+
+    if [ "$version" = "${WARN}not installed${NORMAL}" ]; then
+        echo "  ${RED}•${NORMAL} $name: ${HINT}$version${NORMAL}"
+    else
+        echo "  ${GREEN}•${NORMAL} $name: ${HINT}$version${NORMAL}"
+        if [ -n "$verbose" ] && [ -n "$path" ]; then
+            echo "  ${DIM}└ installed at ${HINT}$path${NORMAL}"
+        fi
+    fi
+    if [ -n "$verbose" ]; then
         echo ""
-    fi
-    if is_balatro_installed; then
-        echo "  ${GREEN}•${NORMAL} Balatro: ${HINT}$(balatro_version)${NORMAL}"
-        if [ -n "$1" ]; then
-            echo "  ${DIM}└ installed at ${HINT}$balatro_path${NORMAL}"
-            echo ""
-        fi
-    else
-        echo "  ${RED}•${NORMAL} Balatro: ${HINT}not installed${NORMAL}"
-        if [ -n "$1" ]; then
-            echo ""
-        fi
-    fi
-    if is_lovely_installed; then
-        echo "  ${GREEN}•${NORMAL} Lovely: ${HINT}$(lovely_version)${NORMAL}"
-        if [ -n "$1" ]; then
-            echo "  ${DIM}└ installed at ${HINT}$balatro_path/version.dll${NORMAL}"
-            echo ""
-        fi
-    else
-        echo "  ${RED}•${NORMAL} Lovely: ${HINT}not installed${NORMAL}"
-        if [ -n "$1" ]; then
-            echo ""
-        fi
-    fi
-    if is_steamodded_installed; then
-        echo "  ${GREEN}•${NORMAL} Steamodded: ${HINT}$(steamodded_version)${NORMAL}"
-        steamodded_path=$(compgen -G "$BALATRO_MODS/Steamodded-smods-*" | head -n 1)
-        if [ -n "$1" ]; then
-            echo "  ${DIM}└ installed at ${HINT}$steamodded_path${NORMAL}"
-            echo ""
-        fi
-    else
-        echo "  ${RED}•${NORMAL} Steamodded: ${HINT}not installed${NORMAL}"
-        if [ -n "$1" ]; then
-            echo ""
-        fi
     fi
 }
 
+status() {
+    local verbose=$1
+    echo ""
+    print_component "cav" "$version" "$SCRIPT_DIR" "$verbose"
+    print_component "Balatro" "$(balatro_version)" "$balatro_path" "$verbose"
+    print_component "Lovely" "$(lovely_version)" "$balatro_path/version.dll" "$verbose"
+
+    local steamodded_path=$(compgen -G "$balatro_mods/Steamodded-smods-*" | head -n 1)
+    print_component "Steamodded" "$(steamodded_version)" "$steamodded_path" "$verbose"
+}
+
 list_versions() {
-    versions=$(curl -sL "https://api.github.com/repos/$1/releases" | grep -E '"tag_name"|"published_at"' | \
-        paste -d ' ' - - | sed -E 's/.*"tag_name": "([^"]+)".*"published_at": "([^T]+)T.*/  \1  '"${DIM}"'(\2)'"${NORMAL}"'/')
-    if [ -n "$2" ]; then
-        echo "${versions//  $2/${HIGHLIGHT}» $2${NORMAL}}"
-    else
-        echo "$versions"
-    fi
+    local repo=$1
+    local current_version=$2
+
+    curl -sL "https://api.github.com/repos/$repo/releases" | \
+        grep -E '"tag_name"|"published_at"' | \
+        paste -d ' ' - - | \
+        sed -E 's/.*"tag_name": "([^"]+)".*"published_at": "([^T]+)T.*/\1 \2/' | \
+        while read -r version date; do
+            if [ "$version" = "$current_version" ]; then
+                printf "  ${HIGHLIGHT}» %-16s${NORMAL} ${DIM}(%s)${NORMAL}\n" "$version" "$date"
+            else
+                printf "  %-16s ${DIM}(%s)${NORMAL}\n" "$version" "$date"
+            fi
+        done
 }
 
 list_lovely() {
@@ -205,6 +219,17 @@ list_steamodded() {
     echo ""
     list_versions "Steamodded/smods" "$(steamodded_version)"
     echo ""
+}
+
+list_mods() {
+    echo "Available mods:"
+    echo ""
+    for mod in "${!mod_desc[@]}"; do
+        status=$(if [ -d "$balatro_mods/$mod}" ]; then echo "[${GREEN}•${NORMAL}]"; else echo "[ ]"; fi)
+        printf "  $status ${HINT}%-16s${NORMAL} ${mod_desc[$mod]}\n" "$mod"
+    done
+    echo ""
+    echo "Run ${HINT}cav add <mod>${NORMAL} to install a mod."
 }
 
 install_lovely() {
@@ -251,25 +276,56 @@ install_steamodded() {
 }
 
 install() {
-    if compgen -G "$BALATRO_MODS/Steamodded-smods*" > /dev/null; then
-        error "Steamodded is already installed."
-        die "To reinstall, please run ${HINT}cav uninstall${NORMAL} first."
-    fi
+    local component=$1
 
-    kill_steam
-    localconfig_path=$(compgen -G "$steam_root/userdata/*/config/localconfig.vdf" | head -n 1)
+    case "$component" in
+        lovely)
+            kill_steam
+            localconfig_path=$(compgen -G "$steam_root/userdata/*/config/localconfig.vdf" | head -n 1)
+            install_lovely
+            echo ""
+            echo "Done! $cavendish"
+            status
+            ;;
+        steamodded)
+            # Remove existing Steamodded if present
+            if compgen -G "$BALATRO_MODS/Steamodded-smods*" > /dev/null; then
+                kill_steam
+                warn "Removing existing Steamodded installation..."
+                rm -rf "$BALATRO_MODS"/Steamodded-smods-*
+            else
+                kill_steam
+            fi
+            install_steamodded
+            echo ""
+            echo "Done! $cavendish"
+            status
+            ;;
+        "")
+            if compgen -G "$BALATRO_MODS/Steamodded-smods*" > /dev/null; then
+                error "Steamodded is already installed."
+                die "To reinstall, please run ${HINT}cav uninstall${NORMAL} first, or use ${HINT}cav install steamodded${NORMAL} to force-reinstall."
+            fi
 
-    install_lovely
-    install_steamodded
+            kill_steam
+            localconfig_path=$(compgen -G "$steam_root/userdata/*/config/localconfig.vdf" | head -n 1)
 
-    echo ""
-    echo "Done! $cavendish"
-    status
-    echo ""
-    echo "You may find it useful to add these lines to your shell config:"
-    echo ""
-    echo "${HINT}export BALATRO_PATH=\"${balatro_path}\"${NORMAL}"
-    echo "${HINT}export BALATRO_MODS=\"${balatro_appdata_path%/}/Mods\"${NORMAL}"
+            install_lovely
+            install_steamodded
+
+            echo ""
+            echo "Done! $cavendish"
+            status
+            echo ""
+            echo "You may find it useful to add these lines to your shell config:"
+            echo ""
+            echo "${HINT}export BALATRO_PATH=\"${balatro_path}\"${NORMAL}"
+            echo "${HINT}export BALATRO_MODS=\"${balatro_appdata_path%/}/Mods\"${NORMAL}"
+            ;;
+        *)
+            die "Unknown component: ${HINT}$component${NORMAL}. Use 'lovely' or 'steamodded'."
+            ;;
+    esac
 }
 
 uninstall() {
@@ -309,6 +365,32 @@ random_adjective() {
 random_noun() {
     local nouns=( "Clubs" "Diamonds" "Hearts" "Spades" "Joker" "Aces" "Kings" "Queens" "Jacks" "Deck" "Blind" "Straight" "Flush" "Planet" "Tarot" "Money" "Reroll" "Card" "Shop" "Jimbo" "Pair" "Sevens" "Eights" "Nines" )
     echo "${nouns[$RANDOM % ${#nouns[@]}]}"
+}
+
+get_mod() {
+    local mod_name=$1
+
+    if [ -z "$mod_name" ]; then
+        die "Please specify a mod name. Run ${HINT}cav mods${NORMAL} to see available mods."
+    fi
+
+    if [ -z "${mod_url[$mod_name]}" ]; then
+        die "Unknown mod: ${HINT}$mod_name${NORMAL}. Run ${HINT}cav mods${NORMAL} to see available mods."
+    fi
+
+    if [ -d "$balatro_mods/$mod_name}" ]; then
+        die "Mod ${HINT}$mod_name${NORMAL} is already installed."
+        # confirm "Do you want to reinstall it?" || die "Aborting."
+        # kill_steam
+        # rm -rf "$balatro_mods/${mod_path[$mod_name]}"
+    else
+        kill_steam
+    fi
+
+    git clone "${mod_url[$mod_name]}" "$balatro_mods/$mod_name"
+    echo ""
+    echo "Done! $cavendish"
+    echo "Installed ${HINT}$mod_name${NORMAL}"
 }
 
 create_project() {
@@ -376,12 +458,16 @@ SMODS.Back{
 
 usage() {
     echo "" >&2
-    echo "  ${HINT}cav install         ${NORMAL}Install the latest version of Lovely and Steamodded." >&2
-    echo "  ${HINT}cav status          ${NORMAL}Show installed versions." >&2
-    echo "  ${HINT}cav list lovely     ${NORMAL}List available versions of Lovely." >&2
-    echo "  ${HINT}cav list steamodded ${NORMAL}List available versions of Steamodded." >&2
-    echo "  ${HINT}cav uninstall       ${NORMAL}Uninstall Lovely and Steamodded." >&2
-    echo "  ${HINT}cav new             ${NORMAL}Create a new Balatro mod project." >&2
+    echo "  ${HINT}cav install              ${NORMAL}Install the latest version of Lovely and Steamodded." >&2
+    echo "  ${HINT}cav install lovely       ${NORMAL}Force-reinstall the latest version of Lovely." >&2
+    echo "  ${HINT}cav install steamodded   ${NORMAL}Force-reinstall the latest version of Steamodded." >&2
+    echo "  ${HINT}cav status               ${NORMAL}Show installed versions." >&2
+    echo "  ${HINT}cav list lovely          ${NORMAL}List available versions of Lovely." >&2
+    echo "  ${HINT}cav list steamodded      ${NORMAL}List available versions of Steamodded." >&2
+    echo "  ${HINT}cav mods                 ${NORMAL}List available mods." >&2
+    echo "  ${HINT}cav get <mod>            ${NORMAL}Download a mod from the list." >&2
+    echo "  ${HINT}cav uninstall            ${NORMAL}Uninstall Lovely and Steamodded." >&2
+    echo "  ${HINT}cav new                  ${NORMAL}Create a new Balatro mod project." >&2
 }
 
 case "$1" in
@@ -410,13 +496,19 @@ case "$1" in
         esac
         ;;
     install)
-        install
+        install "$2"
         ;;
     uninstall)
         uninstall
         ;;
     new)
         create_project
+        ;;
+    mods)
+        list_mods
+        ;;
+    get )
+        get_mod "$2"
         ;;
     *)
         echo "Invalid command: $1" >&2
