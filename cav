@@ -99,7 +99,7 @@ find_balatro() {
         if [ ! -d "$balatro_appdata_path" ]; then
             die "Balatro appdata directory not found at $balatro_appdata_path"
         fi
-        # export BALATRO_MODS="${balatro_appdata_path%/}/Mods"
+        export BALATRO_MODS="${balatro_appdata_path%/}/Mods"
     else
         balatro_appdata_path="${BALATRO_MODS%/Mods}"
         debug "Got balatro_appdata_path from BALATRO_MODS: ${HINT}$balatro_appdata_path${NORMAL}"
